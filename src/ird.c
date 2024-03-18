@@ -247,17 +247,11 @@ crd_response_t inflate_to_file(gzFile input, size_t in_size, char *out_path) {
         goto exit_out;
     }
 
-    gz_ret = Z_OK;
-    while (in_size > 0) {
-
-        if (gz_ret != Z_OK && gz_ret != Z_STREAM_END) {
-            ret_val = CRD_ERR_GZ;
-            goto exit_normal;
-        }
-
-        if (strm.avail_out == 0 || gz_ret == Z_STREAM_END) {
-            write_size = (gz_ret == Z_STREAM_END) ? BUFF_SIZE - strm.avail_out : BUFF_SIZE;
-            ret_val = handle_fwrite(out_buf, read_size, 1, out_file);
+    while (gz_ret != Z_STREAM_END) {
+    
+        if (strm.avail_out == 0) {
+            write_size = BUFF_SIZE;
+            ret_val = handle_fwrite(out_buf, write_size, 1, out_file);
             if (ret_val != Z_OK) {
                 goto exit_normal;
             }
@@ -274,6 +268,24 @@ crd_response_t inflate_to_file(gzFile input, size_t in_size, char *out_path) {
         }
 
         gz_ret = inflate(&strm, Z_NO_FLUSH);
+        if (gz_ret != Z_OK && gz_ret != Z_STREAM_END) {
+            ret_val = CRD_ERR_GZ;
+            goto exit_normal;
+        }
+    }
+
+    if (strm.avail_out != BUFF_SIZE) {
+        write_size = BUFF_SIZE - strm.avail_out;
+        ret_val = handle_fwrite(out_buf, write_size, 1, out_file);
+        if (ret_val != Z_OK) {
+            goto exit_normal;
+        }
+        in_size -= write_size;
+    }
+
+    if (in_size != 0) {
+        ret_val = CRD_ERR_GZ;
+        goto exit_normal;
     }
 
     ret_val = CRD_OK;
